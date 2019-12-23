@@ -89,6 +89,7 @@ echo "Welcome to the IRCBounce House Debian Configuration Script!";printf "\n"
 echo "This script will configure a new debian host the following ways:"
 echo "  Part 1) Configure a fresh debian OS with default IBH settings (security settings, etc)."
 echo "  Part 2) Install IPA-client and configure it to IBH configuration."
+echo "  Part 3) (Optional) Install ZNC"
 read -rsn1 -p "Press any key to start. Or CTRL+C to stop the script.";printf "\n";printf "\n"
 
 read -p "What would you like the hostname of this client to be? (Note: It has to be a FQDN) " client_hostname
@@ -175,4 +176,30 @@ sed -i 's/#PasswordAuthentication yes/PasswordAuthentication no/g' /etc/ssh/sshd
 sed -i 's/#UsePAM yes/UsePAM yes/g' /etc/ssh/sshd_config
 systemctl restart ssh >/dev/null 2>&1
 echo "session required pam_mkhomedir.so" >> /etc/pam.d/common-session
-printf "Done.\n"
+printf "FreeIPA is sucessfully installed and configured for use.\n\n"
+read -p "Would you like this script to install znc? [Y/N] " yn
+      case $yn in
+          [Yy]* ) ;;
+          [Nn]* ) exit;;
+          * ) echo "Please answer Y(es) or N(o).";;
+      esac
+printf "\nThis script will do the following:\n"
+echo "  1) Download ZNC 1.7.5 from tarball"
+echo "  2) Install the following packages if they aren't already installed (this may take a while): "
+echo "    build-essential, libssl-dev, libperl-dev, pkg-config, libicu-dev, libsasl2-dev"
+echo "  3) Install ZNC in $HOME/.znc/ with the following configurations:"
+echo "    a) Disabled modules: awaynick, awaystore, bouncedcc, dcc, log, savebuff"
+echo "    b) Enable python, perl, cyrusauth"
+read -rsn1 -p "Now installing ZNC 1.7.5. This will take a long time. Press CTRL+C to stop or any key to continue..."
+apt install -y build-essential libssl-dev libperl-dev pkg-config libicu-dev libsasl2-dev >/dev/null 2>&1
+wget https://znc.in/releases/znc-1.7.5.tar.gz >/dev/null 2>&1
+tar -xzvf znc-1.7.5.tar.gz >/dev/null 2>&1
+mv $PWD/znc-1.7.5/modules/awaynick.cpp awaynick.cpp.bak
+mv $PWD/znc-1.7.5/modules/awaystore.cpp awaystore.cpp.bak
+mv $PWD/znc-1.7.5/modules/bouncedcc.cpp bouncedcc.cpp.bak
+mv $PWD/znc-1.7.5/modules/dcc.cpp dcc.cpp.bak
+mv $PWD/znc-1.7.5/modules/log.cpp log.cpp.bak
+mv $PWD/znc-1.7.5/modules/savebuff.cpp savebuff.cpp.bak
+$PWD/znc-1.7.5/./configure --prefix="$HOME/.znc" --enable-cyrus >/dev/null 2>&1
+make >/dev/null 2>&1
+make install >/dev/null 2>&1
