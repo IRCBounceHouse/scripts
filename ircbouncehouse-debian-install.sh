@@ -61,7 +61,8 @@ old_hostname=$(hostname -f)
 
 # Check if the system this script is running on is debian 8, 9 or 10.
 if [ "$OS_VERSION" == "Debian GNU/Linux 8 (jessie)" ]; then
-  :
+  echo "Debian 8 is End of Life. Consider updating."
+  exit 1
 elif [ "$OS_VERSION" == "Debian GNU/Linux 9 (stretch)" ]; then
   :
 elif [ "$OS_VERSION" == "Debian GNU/Linux 10 (buster)" ]; then
