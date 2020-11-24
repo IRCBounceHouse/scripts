@@ -5,6 +5,7 @@ if (( $EUID != 0 )); then
   echo "This script needs to be run as root."
   exit
 fi
+
 # Check that a few important packages are installed
 while [ $(dpkg-query -W -f='${Status}' dnsutils 2>/dev/null | grep -c "ok installed") -eq 0 ]; do
       read -p "The package 'dnsutils' is missing and required to run this script. Would you like this script to install it? [Y/N] " yn
@@ -133,11 +134,22 @@ printf "\nNow configuring this host\n"
 read -rsn1 -p "These actions may take a while. Press any key to start..."
 # Pesky CDROM line
 sed -e '/cdrom/ s/^#*/# /' -i /etc/apt/sources.list
-# Add the FreeIPA repo and update apt
-wget -qO - http://apt.numeezy.fr/numeezy.asc | apt-key add - >/dev/null 2>&1
-echo "" >> /etc/apt/sources.list
-echo "# Repo for FreeIPA" >> /etc/apt/sources.list
-echo "deb http://apt.numeezy.fr $OS_VERSION_SHORT main" >> /etc/apt/sources.list
+# If this is a debian 10 system, we don't need to add a 3rd-party Freeipa repo
+if [ $OS_VERSION_SHORT = 'buster' ]; then
+  :
+else
+  # This is not debian 10. We'll need to use a 3rd-party repo
+  # Add the FreeIPA repo apt key
+  wget -qO - http://apt.numeezy.fr/numeezy.asc | apt-key add - >/dev/null 2>&1
+  # Check if the FreeIPA repo is already in /etc/apt/sources.list, if it is, do nothing. If not, add it.
+  if cat /etc/apt/sources.list | grep -q "http://apt.numeezy.fr"; then
+    :
+  else
+    echo "" >> /etc/apt/sources.list
+    echo "# Repo for FreeIPA" >> /etc/apt/sources.list
+    echo "deb http://apt.numeezy.fr $OS_VERSION_SHORT main" >> /etc/apt/sources.list
+  fi
+fi
 apt-get update >/dev/null 2>&1
 apt-get -y upgrade >/dev/null 2>&1
 apt-get -y install fail2ban >/dev/null 2>&1
@@ -170,14 +182,17 @@ read -rsn1 -p "Press any key to start..."
 ipa-client-install --unattended --enable-dns-updates --hostname=$client_hostname --mkhomedir --server=$server_hostname --domain=$domain --realm=$realm --principal=$username_cred --password=$password_cred >/dev/null 2>&1
 
 # Configure SSH correctly. FreeIPA changes the configuration so we change it back after it runs.
-# Use the check we did earlier about the sshd_config wording and change the configuration file
+# Use the check we did earlier with $SSHD_CONFIG_ROOT_LOGIN_STRING and change the configuration file if necessary
+# If $SSHD_CONFIG_ROOT_LOGIN_STRING is null, grep didn't find the commented string, so it's already set how we want it.
 sed -i "s/#PermitRootLogin $SSHD_CONFIG_ROOT_LOGIN_STRING/PermitRootLogin without-password/g" /etc/ssh/sshd_config
 sed -i 's/#PasswordAuthentication yes/PasswordAuthentication no/g' /etc/ssh/sshd_config
+
 # Configure SSH to work with FreeIPA and SSSD
 sed -i 's/#UsePAM yes/UsePAM yes/g' /etc/ssh/sshd_config
 systemctl restart ssh >/dev/null 2>&1
 echo "session required pam_mkhomedir.so" >> /etc/pam.d/common-session
 printf "FreeIPA is sucessfully installed and configured for use.\n\n"
+
 read -p "Would you like this script to install znc? [Y/N] " yn
       case $yn in
           [Yy]* ) ;;
